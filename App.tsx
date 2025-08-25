@@ -1,5 +1,14 @@
 
 import React, { useState, useEffect, createContext, useCallback } from 'react';
+import './theme.css';
+
+type Theme = 'light' | 'dark';
+interface ThemeContextType {
+  theme: Theme;
+  toggleTheme: () => void;
+}
+export const ThemeContext = createContext<ThemeContextType>({ theme: 'light', toggleTheme: () => {} });
+import './theme.css';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChangedListener } from './services/firebaseAuth';
 import type { User } from './types';
@@ -19,20 +28,31 @@ export const AuthContext = createContext<AuthContextType>({ user: null, loading:
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = localStorage.getItem('theme');
+    return stored === 'dark' ? 'dark' : 'light';
+  });
+
+  const toggleTheme = () => {
+    setTheme(t => {
+      const next = t === 'light' ? 'dark' : 'light';
+      localStorage.setItem('theme', next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   const handleAuthStateChanged = useCallback((user: User | null) => {
-    console.log('Estado de autenticação alterado:', user ? `Usuário: ${user.name}` : 'Usuário deslogado');
     setUser(user);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    console.log('Configurando listener de autenticação...');
     const unsubscribe = onAuthStateChangedListener(handleAuthStateChanged);
-    return () => {
-      console.log('Removendo listener de autenticação...');
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, [handleAuthStateChanged]);
 
   if (loading) {
@@ -44,22 +64,24 @@ const App: React.FC = () => {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading }}>
-      <HashRouter>
-        <div className="min-h-screen bg-background flex flex-col">
-          <Header />
-          <main className="flex-grow container mx-auto p-4 md:p-6">
-            <Routes>
-              <Route path="/login" element={!user ? <AuthPage /> : <Navigate to="/dashboard" />} />
-              <Route path="/dashboard" element={user ? <DashboardPage /> : <Navigate to="/login" />} />
-              <Route path="/project/:projectId" element={user ? <ProjectDetailPage /> : <Navigate to="/login" />} />
-              <Route path="/share/:shareId" element={<PublicProjectPage />} />
-              <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
-            </Routes>
-          </main>
-        </div>
-      </HashRouter>
-    </AuthContext.Provider>
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      <AuthContext.Provider value={{ user, loading }}>
+        <HashRouter>
+          <div className="min-h-screen bg-background flex flex-col">
+            <Header />
+            <main className="flex-grow container mx-auto p-4 md:p-6">
+              <Routes>
+                <Route path="/login" element={!user ? <AuthPage /> : <Navigate to="/dashboard" />} />
+                <Route path="/dashboard" element={user ? <DashboardPage /> : <Navigate to="/login" />} />
+                <Route path="/project/:projectId" element={user ? <ProjectDetailPage /> : <Navigate to="/login" />} />
+                <Route path="/share/:shareId" element={<PublicProjectPage />} />
+                <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
+              </Routes>
+            </main>
+          </div>
+        </HashRouter>
+      </AuthContext.Provider>
+    </ThemeContext.Provider>
   );
 };
 

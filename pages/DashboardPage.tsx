@@ -111,8 +111,8 @@ const ProjectForm: React.FC<{ onSave: (project: Omit<Project, 'id' | 'ownerUid'>
                         {imageFile && <p className="text-xs text-gray-400 mt-1">Imagem selecionada: {imageFile.name}</p>}
                     </div>
                     <div className="flex justify-end space-x-3 pt-4">
-                        <button type="button" onClick={onCancel} className="px-4 py-2 rounded-md bg-secondary hover:bg-gray-600">Cancelar</button>
-                        <button type="submit" className="px-4 py-2 rounded-md bg-primary text-white hover:bg-blue-700">Salvar Projeto</button>
+                        <button type="button" onClick={onCancel} className="button button-secondary">Cancelar</button>
+                        <button type="submit" className="button button-primary">Salvar Projeto</button>
                     </div>
                 </form>
             </div>

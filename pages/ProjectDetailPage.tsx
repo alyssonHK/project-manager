@@ -181,8 +181,8 @@ const TaskDetailModal: React.FC<{
                       maxLength={500}
                     />
                     <div className="flex gap-2 mb-4">
-                      <button onClick={handleEditSave} disabled={saving} className="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-700">Salvar</button>
-                      <button onClick={() => { setEditMode(false); setEditTitle(task.title); setEditDescription(task.description); }} className="bg-secondary text-text-secondary px-4 py-2 rounded-md hover:bg-gray-600">Cancelar</button>
+                      <button onClick={handleEditSave} disabled={saving} className="button button-primary">Salvar</button>
+                      <button onClick={() => { setEditMode(false); setEditTitle(task.title); setEditDescription(task.description); }} className="button button-secondary">Cancelar</button>
                     </div>
                   </>
                 ) : (
@@ -206,7 +206,7 @@ const TaskDetailModal: React.FC<{
                     <h3 className="text-lg font-semibold mb-2">Anotações da Tarefa</h3>
                     <form onSubmit={handleAddNote} className="flex gap-2 mb-2">
                         <textarea value={newNoteContent} onChange={e => setNewNoteContent(e.target.value)} rows={2} placeholder="Adicionar uma anotação..." className="flex-1 bg-secondary border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
-                        <button type="submit" className="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-700">Adicionar</button>
+                        <button type="submit" className="button button-primary">Adicionar</button>
                     </form>
                     {loadingNotes ? (
                         <p>Carregando anotações...</p>
@@ -221,7 +221,7 @@ const TaskDetailModal: React.FC<{
                     )}
                 </div>
         <div className="flex justify-between items-center pt-4 border-t border-gray-700">
-          <button onClick={handleDelete} className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">Excluir Tarefa</button>
+          <button onClick={handleDelete} className="button button-danger">Excluir Tarefa</button>
         </div>
       </div>
     </div>
