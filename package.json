@@ -6,22 +6,27 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@hello-pangea/dnd": "^18.0.1",
-    "@tldraw/tldraw": "^3.14.2",
-    "firebase": "^12.0.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^7.7.1",
-    "recharts": "^3.1.0"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^5.0.1",
+    "gh-pages": "^6.0.0",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"
+  },
+  "homepage": "https://alyssonHK.github.io/project-manager",
+  "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
+    "@tldraw/tldraw": "^3.15.3",
+    "firebase": "^9.23.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.1",
+    "recharts": "^3.1.2"
   }
 }
