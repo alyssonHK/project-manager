@@ -1,0 +1,6 @@
+{
+  "name": "Firebase Project Manager",
+  "description": "A web application for creating and managing projects and tasks, built with React and a simulated Firebase backend. It features user authentication, CRUD operations for projects and tasks, interactive dashboards, and read-only project sharing.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

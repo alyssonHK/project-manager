@@ -1,0 +1,45 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firebase Project Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'primary': '#1e40af', // blue-800
+              'secondary': '#374151', // gray-700
+              'background': '#111827', // gray-900
+              'card': '#1f2937', // gray-800
+              'text-primary': '#f9fafb', // gray-50
+              'text-secondary': '#d1d5db', // gray-300
+              'accent': '#3b82f6', // blue-500
+            },
+          },
+        },
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "recharts": "https://esm.sh/recharts@^3.1.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.7.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tldraw/tldraw@3.14.2/tldraw.css" />
+</head>
+  <body class="bg-background text-text-primary">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
