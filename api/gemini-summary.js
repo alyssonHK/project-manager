@@ -13,6 +13,7 @@ export default async function handler(req, res) {
   const apiUrl = process.env.GEMINI_API_URL || process.env.VITE_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent';
   const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
   const serviceAccountJson = process.env.GEMINI_SERVICE_ACCOUNT_KEY || process.env.VITE_GEMINI_SERVICE_ACCOUNT_KEY;
+  const projectId = process.env.GEMINI_PROJECT_ID || process.env.VITE_GEMINI_PROJECT_ID || process.env.GEMINI_PROJECT_ID;
 
   if (!apiUrl || (!apiKey && !serviceAccountJson)) {
     console.error('gemini proxy misconfigured:', {
@@ -32,7 +33,7 @@ export default async function handler(req, res) {
     const headers = { 'Content-Type': 'application/json' };
 
     // Se houver service account JSON, gere um access token e use Bearer
-    if (serviceAccountJson) {
+  if (serviceAccountJson) {
       try {
         const creds = JSON.parse(serviceAccountJson);
         // Use JWT client explicitly so we request the cloud-platform scope
@@ -45,6 +46,8 @@ export default async function handler(req, res) {
         const tokenValue = r && r.access_token ? r.access_token : jwtClient.credentials && jwtClient.credentials.access_token ? jwtClient.credentials.access_token : null;
         if (tokenValue) {
           headers['Authorization'] = `Bearer ${tokenValue}`;
+          // if user supplied a project id, include x-goog-user-project for billing/project selection
+          if (projectId) headers['x-goog-user-project'] = projectId;
         } else {
           console.error('gemini proxy: failed to obtain access token from JWT client', { hasResponse: Boolean(r), credsKeys: Object.keys(creds || {}) });
           return res.status(502).json({ error: 'Failed to obtain access token from service account (JWT)' });
@@ -59,7 +62,7 @@ export default async function handler(req, res) {
       fetchUrl = `${fetchUrl}${sep}key=${encodeURIComponent(apiKey)}`;
     }
 
-    const r = await fetch(fetchUrl, {
+  const r = await fetch(fetchUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -72,6 +75,20 @@ export default async function handler(req, res) {
     } else {
       // tenta texto quando não for JSON
       data = await r.text();
+    }
+
+    // If debug flag requested, fetch token scopes from tokeninfo and include only scopes in debug
+    if (req.body && req.body.debug === true && headers['Authorization']) {
+      try {
+        const token = headers['Authorization'].replace('Bearer ', '');
+        const infoRes = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(token)}`);
+        const info = await infoRes.json();
+        const scopes = info.scope || info.scopes || null;
+        return res.status(200).json({ ok: true, result: data, debug: { token_scopes: scopes } });
+      } catch (e) {
+        console.error('gemini proxy: failed to fetch tokeninfo for debug', e && e.message ? e.message : String(e));
+        // fallthrough to return normal result
+      }
     }
 
     return res.status(200).json({ ok: true, result: data });
