@@ -3,7 +3,8 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(() => {
-  const base = process.env.VITE_BASE || '/project-manager/';
+  // Se estiver rodando no Vercel (process.env.VERCEL é definido), sirva na raiz '/'.
+  const base = process.env.VITE_BASE || (process.env.VERCEL ? '/' : '/project-manager/');
   return {
     plugins: [react()],
     resolve: {
