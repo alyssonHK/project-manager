@@ -1,7 +1,7 @@
 // Vercel serverless function: recebe { prompt } e encaminha para a API do Gemini
 // Configure as variáveis de ambiente no Vercel: GEMINI_API_URL e GEMINI_API_KEY
 
-import { GoogleAuth } from 'google-auth-library';
+import { GoogleAuth, JWT } from 'google-auth-library';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -33,29 +33,25 @@ export default async function handler(req, res) {
 
     // Se houver service account JSON, gere um access token e use Bearer
     if (serviceAccountJson) {
-      const auth = new GoogleAuth({
-        credentials: JSON.parse(serviceAccountJson),
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-      });
-      const client = await auth.getClient();
       try {
-        const accessToken = await client.getAccessToken();
-        // getAccessToken() may return a string or an object { token } depending on the version.
-        let tokenValue = null;
-        if (!accessToken) tokenValue = null;
-        else if (typeof accessToken === 'string') tokenValue = accessToken;
-        else if (accessToken.token) tokenValue = accessToken.token;
-        else if (accessToken.access_token) tokenValue = accessToken.access_token;
-
+        const creds = JSON.parse(serviceAccountJson);
+        // Use JWT client explicitly so we request the cloud-platform scope
+        const jwtClient = new JWT({
+          email: creds.client_email,
+          key: creds.private_key,
+          scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        });
+        const r = await jwtClient.authorize();
+        const tokenValue = r && r.access_token ? r.access_token : jwtClient.credentials && jwtClient.credentials.access_token ? jwtClient.credentials.access_token : null;
         if (tokenValue) {
           headers['Authorization'] = `Bearer ${tokenValue}`;
         } else {
-          console.error('gemini proxy: failed to obtain access token from service account');
-          return res.status(502).json({ error: 'Failed to obtain access token from service account' });
+          console.error('gemini proxy: failed to obtain access token from JWT client', { hasResponse: Boolean(r), credsKeys: Object.keys(creds || {}) });
+          return res.status(502).json({ error: 'Failed to obtain access token from service account (JWT)' });
         }
       } catch (e) {
-        console.error('gemini proxy: error generating access token', e && e.message ? e.message : String(e));
-        return res.status(502).json({ error: 'Failed to generate access token', details: e && e.message ? e.message : String(e) });
+        console.error('gemini proxy: error generating access token (JWT)', e && e.message ? e.message : String(e));
+        return res.status(502).json({ error: 'Failed to generate access token (JWT)', details: e && e.message ? e.message : String(e) });
       }
     } else if (apiKey) {
       // API Key path: adiciona ?key=...
