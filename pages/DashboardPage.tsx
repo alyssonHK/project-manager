@@ -363,13 +363,16 @@ const DashboardPage: React.FC = () => {
                     setLoading(true);
                     const allTasks = tasks; // já carregadas no estado
                     const lines: string[] = [];
-                    lines.push('Resumo geral de tarefas do usuário:');
+                    lines.push('Contexto: Você é um assistente executivo que recebe o panorama completo de tarefas do usuário. Gere um briefing de alto nível, principais achados, riscos, e 5 ideias acionáveis para avançar os projetos. Priorize recomendações práticas e rápidas.');
+                    lines.push('\nResumo geral de tarefas do usuário:');
                     lines.push(`Total de tarefas: ${allTasks.length}`);
                     const byStatus = Object.values(TASK_STATUS).map(s => ({ status: s, items: allTasks.filter(t => t.status === s) }));
+                    // Liste tarefas por status com contextos curtos
                     byStatus.forEach(group => {
                       lines.push(`\nStatus: ${group.status} - ${group.items.length} tarefas`);
                       group.items.forEach((t, i) => {
                         lines.push(`${i + 1}. [${t.status}] ${t.title} (Projeto: ${projects.find(p=>p.id===t.projectId)?.name || 'Desconhecido'})`);
+                        if (t.description) lines.push(`   Descrição: ${t.description}`);
                       });
                     });
 
@@ -381,9 +384,12 @@ const DashboardPage: React.FC = () => {
                     tasksWithNotes.forEach((t, idx) => {
                       if (t.notes && t.notes.length > 0) {
                         lines.push(`${idx + 1}. ${t.title}:`);
-                            t.notes.forEach((n: any, _j: number) => lines.push(`   - ${n.content || n.text || JSON.stringify(n)}`));
+                        t.notes.forEach((n: any, _j: number) => lines.push(`   - ${n.content || n.text || JSON.stringify(n)}`));
                       }
                     });
+
+                    // Adiciona instrução final para o modelo: produzir briefing, principais achados e 5 ideias acionáveis
+                    lines.push('\nINSTRUÇÕES PARA O MODELO: Gere um briefing executivo (~5-8 linhas), destaque os 3 principais riscos/obstáculos, e proponha 5 ideias práticas para priorizar e acelerar entregas. Seja direto e use bullets.');
 
                     const prompt = lines.join('\n');
 
@@ -523,15 +529,16 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
     setSummaryProjectName(project.name);
     setSummaryLoading(true);
     try {
-      const projectTasks = tasks.filter(t => t.projectId === project.id && t.status === TASK_STATUS.DONE);
+      // Inclui tarefas Concluídas, Em Andamento e Pendentes para contexto completo
+      const projectTasks = tasks.filter(t => t.projectId === project.id && [TASK_STATUS.Done, TASK_STATUS.InProgress, TASK_STATUS.ToDo].includes(t.status));
 
       if (projectTasks.length === 0) {
-        setSummaryText('Nenhuma tarefa concluída encontrada para este projeto.');
+        setSummaryText('Nenhuma tarefa encontrada para este projeto.');
         setSummaryModalOpen(true);
         return;
       }
 
-      // Busca notas para cada tarefa concluída
+      // Busca notas para cada tarefa relevante
       const tasksWithNotes = await Promise.all(projectTasks.map(async (task) => {
         try {
           const notes = await getNotesForTask(task.id);
@@ -545,9 +552,11 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
       const promptLines: string[] = [];
       promptLines.push(`Resumo do Projeto: ${project.name}`);
       promptLines.push(`Período: ${new Date(project.startDate).toLocaleDateString()} -> ${new Date(project.endDate).toLocaleDateString()}`);
-      promptLines.push('Tarefas concluídas e suas anotações:');
+
+      promptLines.push('Tarefas relevantes (Concluídas / Em Andamento / Pendentes) e suas anotações:');
       tasksWithNotes.forEach((t, i) => {
-        promptLines.push(`${i + 1}. ${t.title}`);
+        promptLines.push(`${i + 1}. [${t.status}] ${t.title}`);
+        if (t.description) promptLines.push(`   Descrição: ${t.description}`);
         if (t.notes && t.notes.length > 0) {
           t.notes.forEach((n: any, j: number) => {
             promptLines.push(`   - Nota ${j + 1}: ${n.content || n.text || JSON.stringify(n)}`);
@@ -556,6 +565,9 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
           promptLines.push('   - Sem anotações.');
         }
       });
+
+      // Instruções finais: pedir resumo executivo, principais riscos e 5 recomendações/priorizações
+      promptLines.push('\nINSTRUÇÕES: Gere um resumo executivo curto (5-8 linhas), liste 3 principais riscos/obstáculos e forneça 5 recomendações práticas e priorizadas para avançar este projeto.');
 
       const prompt = promptLines.join('\n');
 
