@@ -562,7 +562,7 @@ const DashboardPage: React.FC = () => {
                     // Tenta usar o proxy (recomendado). Caso o proxy não esteja acessível, tenta chamar direto (menos seguro).
           if (proxyUrl) {
                       try {
-                        const res = await fetch(proxyUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+            const res = await fetch(proxyUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, provider: 'openai', model: 'gpt-5-mini' }) });
                         if (!res.ok) throw new Error(`Proxy retornou ${res.status}`);
                         const data = await res.json();
                         // data.result contém o retorno da Gemini via proxy
@@ -732,11 +732,27 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
 
       const prompt = promptLines.join('\n');
 
-      // Se a API do Gemini estiver configurada via env, tenta chamar. (AVISO: client-side exposure de chave)
+      // Se houver um proxy configurado, use-o (recomendado) — solicita explicitamente OpenAI/GPT.
+      const proxyUrl = (import.meta as any).env?.VITE_SUMMARY_PROXY_URL || '/api/gemini-summary';
       const apiUrl = (import.meta as any).env?.VITE_GEMINI_API_URL;
       const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
 
-    if (apiUrl && apiKey) {
+      if (proxyUrl) {
+        try {
+          const res = await fetch(proxyUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, provider: 'openai', model: 'gpt-5-mini' }) });
+          if (!res.ok) throw new Error(`Proxy retornou ${res.status}`);
+          const data = await res.json();
+          const payload = data.result || data;
+          setSummaryText(extractModelText(payload));
+          setSummaryModalOpen(true);
+        } catch (err: any) {
+          setSummaryText(`Falha ao chamar proxy: ${err?.message || err}.\n\nPrompt:\n\n${prompt}`);
+          setSummaryModalOpen(true);
+        }
+        return;
+      }
+
+      if (apiUrl && apiKey) {
         try {
           const res = await fetch(apiUrl, {
             method: 'POST',
@@ -747,9 +763,9 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
             body: JSON.stringify({ prompt }),
           });
           if (!res.ok) throw new Error(`API retornou status ${res.status}`);
-      const data = await res.json();
-      const summary = extractModelText(data);
-      setSummaryText(summary);
+          const data = await res.json();
+          const summary = extractModelText(data);
+          setSummaryText(summary);
           setSummaryModalOpen(true);
         } catch (err: any) {
           // Se falhar, mostra o prompt para o usuário usar manualmente
