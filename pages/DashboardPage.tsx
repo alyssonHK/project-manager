@@ -550,7 +550,7 @@ const DashboardPage: React.FC = () => {
                     });
 
                     // Adiciona instrução final para o modelo: produzir briefing, principais achados e 5 ideias acionáveis
-                    lines.push('\nINSTRUÇÕES PARA O MODELO: Gere um briefing executivo (~5-8 linhas), destaque os 3 principais riscos/obstáculos, e proponha 5 ideias práticas para priorizar e acelerar entregas. Seja direto e use bullets.');
+                    lines.push('\nINSTRUÇÕES PARA O MODELO: Gere um briefing executivo (~5-8 linhas), resuma as tarefas pendentes e as anotaçções por projeto. Seja direto e use bullets. Faça um pequeno resumo dos projetos e tarefa para passar em um e-mail atualizando os interessados do projeto.');
 
                     const prompt = lines.join('\n');
 
