@@ -192,8 +192,14 @@ const TaskDetailModal: React.FC<{
                     <div className="flex flex-col md:flex-row md:items-center gap-4">
                         <div>
                             <label className="block text-sm font-medium text-text-secondary">Status</label>
-                            <select value={status} onChange={e => handleStatusChange(e.target.value as TaskStatus)} className="mt-1 px-3 py-2 bg-secondary border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-accent">
-                                {Object.values(TaskStatus).map(s => <option key={s} value={s}>{TASK_STATUSES[s]}</option>)} 
+                            <select
+                              value={status}
+                              onChange={e => handleStatusChange(e.target.value as TaskStatus)}
+                              className="mt-1 px-3 py-2 bg-secondary border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-accent min-w-[140px] w-full md:w-44 text-base"
+                            >
+                              {Object.values(TaskStatus).map(s => (
+                                <option key={s} value={s}>{TASK_STATUSES[s]}</option>
+                              ))}
                             </select>
                         </div>
                         <div>
@@ -260,7 +266,8 @@ const ProjectSidebar: React.FC<{
 
   if (!open) {
     return (
-      <button onClick={toggle} className="fixed right-0 top-1/2 z-50 bg-accent text-white rounded-l px-2 py-1 shadow-lg">&lt;</button>
+      // botão quando a sidebar está fechada — centralizado verticalmente
+      <button onClick={toggle} className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-accent text-white rounded-l px-2 py-1 shadow-lg">&lt;</button>
     );
   }
 
@@ -281,7 +288,7 @@ const ProjectSidebar: React.FC<{
   };
 
   return (
-    <aside className="fixed right-0 top-0 w-80 h-full bg-card border-l border-gray-700 flex flex-col shadow-xl transition-all duration-300 z-40">
+  <aside className="fixed right-0 top-0 bottom-0 w-80 bg-card border-l border-gray-700 flex flex-col shadow-xl transition-all duration-300 z-40 pt-16">
       <button onClick={toggle} className="absolute left-0 -translate-x-full top-1/2 z-50 bg-accent text-white rounded-r px-2 py-1 shadow-lg">&gt;</button>
       <div className="flex-1 flex flex-col divide-y divide-gray-700 h-full">
         {/* Notas do Projeto */}
@@ -371,7 +378,8 @@ const ProjectDetailPage: React.FC = () => {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
     const [project, setProject] = useState<Project | null>(null);
-    const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskNotesMap, setTaskNotesMap] = useState<Record<string, TaskNote[]>>({});
     const [notes, setNotes] = useState<Note[]>([]);
     const [files, setFiles] = useState<ProjectFile[]>([]);
     const [loading, setLoading] = useState(true);
@@ -439,6 +447,19 @@ const ProjectDetailPage: React.FC = () => {
                 setTasks(projTasks);
                 setNotes(projNotes);
                 setFiles(projFiles);
+                // Buscar notas de todas as tarefas
+                const notesMap: Record<string, TaskNote[]> = {};
+                await Promise.all(
+                  projTasks.map(async (task) => {
+                    try {
+                      const notes = await getNotesForTask(task.id);
+                      notesMap[task.id] = notes;
+                    } catch {
+                      notesMap[task.id] = [];
+                    }
+                  })
+                );
+                setTaskNotesMap(notesMap);
             } else {
                 setError('Projeto não encontrado.');
             }
@@ -717,12 +738,31 @@ const ProjectDetailPage: React.FC = () => {
                                                 {...provided.draggableProps}
                                                 {...provided.dragHandleProps}
                                                 className={`mb-4 bg-secondary p-3 rounded-md shadow ${snapshot.isDragging ? 'ring-2 ring-accent' : ''}`}
-                                                style={{ ...provided.draggableProps.style }}
+                                                style={{
+                                                  ...provided.draggableProps.style,
+                                                  zIndex: snapshot.isDragging ? 9999 : 'auto',
+                                                  position: snapshot.isDragging ? 'fixed' : undefined,
+                                                  pointerEvents: snapshot.isDragging ? 'auto' : undefined,
+                                                }}
                                               >
                                                 <div className="flex justify-between items-center">
                                                   <div>
                                                     <div className="font-semibold text-text-primary">{task.title}</div>
                                                     <div className="text-sm text-text-secondary">{task.description}</div>
+                                                    {/* Notas/Subtarefas */}
+                                                    {taskNotesMap[task.id] && taskNotesMap[task.id].length > 0 && (
+                                                      <div className="mt-2 text-xs text-text-secondary">
+                                                        {taskNotesMap[task.id].map((note) => (
+                                                          <div
+                                                            key={note.id}
+                                                            style={{ wordBreak: 'break-word', whiteSpace: 'pre-line' }}
+                                                            className="break-words"
+                                                          >
+                                                            - {note.content}
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    )}
                                                   </div>
                                                   <button onClick={() => setSelectedTask(task)} className="ml-2 text-accent hover:underline text-xs">Detalhes</button>
                                                 </div>

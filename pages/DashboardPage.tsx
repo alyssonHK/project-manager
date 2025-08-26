@@ -9,6 +9,8 @@ import TldrawWithSave from '../components/TldrawWithSave';
 import { getProjectsForUser, createProject as apiCreateProject, updateProject } from '../services/firebaseProjects';
 import { uploadProjectImage } from '../services/firebaseProjectFiles';
 import { getTasksForProject, updateTask as apiUpdateTask } from '../services/firebaseTasks';
+import { getNotesForTask } from '../services/firebaseTaskNotes';
+import { saveTasksSummary, getTasksSummary } from '../services/firebaseSummaries';
 import { AuthContext } from '../App';
 
 // << 5. BOA PRÁTICA: Definindo tipos e constantes
@@ -131,6 +133,8 @@ const DashboardPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'projects' | 'tasks' | 'tldraw'>('projects');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [savedSummary, setSavedSummary] = useState<string | null>(null);
+  const [savedSummaryUpdatedAt, setSavedSummaryUpdatedAt] = useState<string | null>(null);
 
   console.log('DashboardPage renderizado, usuário:', user ? `Logado: ${user.name}` : 'Não logado');
 
@@ -166,6 +170,20 @@ const DashboardPage: React.FC = () => {
     };
     
     fetchAllData();
+    // Carrega o resumo salvo para o usuário (se houver)
+    const loadSummary = async () => {
+      if (!user) return;
+      try {
+        const s = await getTasksSummary(user.uid);
+        if (s) {
+          setSavedSummary(s.summary);
+          setSavedSummaryUpdatedAt(s.updatedAt);
+        }
+      } catch (e) {
+        console.error('Falha ao carregar resumo salvo', e);
+      }
+    };
+    loadSummary();
   }, [user]);
 
   // << 4. CORREÇÃO: Lógica de criação de projeto robusta
@@ -284,15 +302,20 @@ const DashboardPage: React.FC = () => {
         
         {/* Botão Novo Projeto - apenas na aba de projetos */}
         {activeTab === 'projects' && (
-          <button 
-            onClick={() => setShowProjectForm(true)} 
-            className="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center space-x-2 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-            </svg>
-            <span>Novo Projeto</span>
-          </button>
+          <div className="flex items-center space-x-3">
+            <button onClick={toggleTheme} title="Alternar tema" className="bg-secondary text-text-primary px-3 py-2 rounded-md hover:opacity-90">
+              {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
+            </button>
+            <button 
+              onClick={() => setShowProjectForm(true)} 
+              className="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center space-x-2 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              <span>Novo Projeto</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -330,6 +353,92 @@ const DashboardPage: React.FC = () => {
         {activeTab === 'tasks' && !loading && (
           <div>
             <h2 className="text-2xl font-bold mb-6">Panorama Geral das Tarefas</h2>
+            <div className="flex items-center justify-end mb-4 space-x-3">
+              <div className="text-sm text-text-secondary">Último resumo: {savedSummaryUpdatedAt ? new Date(savedSummaryUpdatedAt).toLocaleString() : 'Nenhum'}</div>
+              <button
+                onClick={async () => {
+                  if (!user) { setError('Usuário não autenticado'); return; }
+                  // Gera prompt com todas as tarefas e status
+                  try {
+                    setLoading(true);
+                    const allTasks = tasks; // já carregadas no estado
+                    const lines: string[] = [];
+                    lines.push('Resumo geral de tarefas do usuário:');
+                    lines.push(`Total de tarefas: ${allTasks.length}`);
+                    const byStatus = Object.values(TASK_STATUS).map(s => ({ status: s, items: allTasks.filter(t => t.status === s) }));
+                    byStatus.forEach(group => {
+                      lines.push(`\nStatus: ${group.status} - ${group.items.length} tarefas`);
+                      group.items.forEach((t, i) => {
+                        lines.push(`${i + 1}. [${t.status}] ${t.title} (Projeto: ${projects.find(p=>p.id===t.projectId)?.name || 'Desconhecido'})`);
+                      });
+                    });
+
+                    // Busca notas de forma paralela (pode gerar leituras)
+                    const tasksWithNotes = await Promise.all(allTasks.map(async t => {
+                      try { const notes = await getNotesForTask(t.id); return { ...t, notes }; } catch { return { ...t, notes: [] }; }
+                    }));
+                    lines.push('\nAnotações das tarefas:');
+                    tasksWithNotes.forEach((t, idx) => {
+                      if (t.notes && t.notes.length > 0) {
+                        lines.push(`${idx + 1}. ${t.title}:`);
+                            t.notes.forEach((n: any, _j: number) => lines.push(`   - ${n.content || n.text || JSON.stringify(n)}`));
+                      }
+                    });
+
+                    const prompt = lines.join('\n');
+
+                    const proxyUrl = (import.meta as any).env?.VITE_SUMMARY_PROXY_URL || '/api/gemini-summary';
+                    const apiUrl = (import.meta as any).env?.VITE_GEMINI_API_URL;
+                    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY;
+                    let finalSummary = '';
+
+                    // Tenta usar o proxy (recomendado). Caso o proxy não esteja acessível, tenta chamar direto (menos seguro).
+                    if (proxyUrl) {
+                      try {
+                        const res = await fetch(proxyUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+                        if (!res.ok) throw new Error(`Proxy retornou ${res.status}`);
+                        const data = await res.json();
+                        // data.result contém o retorno da Gemini via proxy
+                        const payload = data.result || data;
+                        finalSummary = payload.summary || payload.text || (typeof payload === 'string' ? payload : JSON.stringify(payload));
+                      } catch (errProxy) {
+                        console.warn('Falha no proxy, tentando chamada direta...', errProxy);
+                        // fallback para chamada direta se chave e endpoint estiverem configurados
+                        if (apiUrl && apiKey) {
+                          try {
+                            const res2 = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ prompt }) });
+                            if (!res2.ok) throw new Error(`API retornou ${res2.status}`);
+                            const data2 = await res2.json();
+                            finalSummary = data2.summary || data2.text || (typeof data2 === 'string' ? data2 : JSON.stringify(data2));
+                          } catch (errDirect) {
+                            finalSummary = `Falha ao chamar API externa: ${String(errDirect)}.\n\nPrompt:\n${prompt}`;
+                          }
+                        } else {
+                          finalSummary = `Prompt gerado:\n\n${prompt}`;
+                        }
+                      }
+                    }
+
+                    // Salva no Firestore para o usuário (substitui o anterior)
+                    await saveTasksSummary(user.uid, finalSummary);
+                    setSavedSummary(finalSummary);
+                    setSavedSummaryUpdatedAt(new Date().toISOString());
+                  } catch (e: any) {
+                    console.error(e);
+                    setError(e?.message || 'Falha ao gerar resumo');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="button button-primary"
+              >Gerar Resumo (Gemini)</button>
+            </div>
+            {savedSummary && (
+              <div className="bg-secondary p-4 rounded-md mt-4">
+                <h4 className="font-semibold">Resumo salvo</h4>
+                <div className="text-sm text-text-secondary whitespace-pre-wrap mt-2">{savedSummary}</div>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="md:col-span-2 lg:col-span-1">
                 <div className="bg-card p-4 rounded-lg shadow-lg h-full flex flex-col justify-center">
@@ -403,7 +512,90 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
     [TaskStatus.Done]: '#22c55e',
   };
 
+  // Estado local para o modal de resumo
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+  const [summaryProjectName, setSummaryProjectName] = useState('');
+
+  // Gera o prompt e tenta chamar a API externa (quando configurada). Caso contrário, abre modal com o prompt para cópia/manual.
+  const generateProjectSummary = async (project: Project) => {
+    setSummaryProjectName(project.name);
+    setSummaryLoading(true);
+    try {
+      const projectTasks = tasks.filter(t => t.projectId === project.id && t.status === TASK_STATUS.DONE);
+
+      if (projectTasks.length === 0) {
+        setSummaryText('Nenhuma tarefa concluída encontrada para este projeto.');
+        setSummaryModalOpen(true);
+        return;
+      }
+
+      // Busca notas para cada tarefa concluída
+      const tasksWithNotes = await Promise.all(projectTasks.map(async (task) => {
+        try {
+          const notes = await getNotesForTask(task.id);
+          return { ...task, notes };
+        } catch (e) {
+          return { ...task, notes: [] };
+        }
+      }));
+
+      // Compondo o prompt
+      const promptLines: string[] = [];
+      promptLines.push(`Resumo do Projeto: ${project.name}`);
+      promptLines.push(`Período: ${new Date(project.startDate).toLocaleDateString()} -> ${new Date(project.endDate).toLocaleDateString()}`);
+      promptLines.push('Tarefas concluídas e suas anotações:');
+      tasksWithNotes.forEach((t, i) => {
+        promptLines.push(`${i + 1}. ${t.title}`);
+        if (t.notes && t.notes.length > 0) {
+          t.notes.forEach((n: any, j: number) => {
+            promptLines.push(`   - Nota ${j + 1}: ${n.content || n.text || JSON.stringify(n)}`);
+          });
+        } else {
+          promptLines.push('   - Sem anotações.');
+        }
+      });
+
+      const prompt = promptLines.join('\n');
+
+      // Se a API do Gemini estiver configurada via env, tenta chamar. (AVISO: client-side exposure de chave)
+      const apiUrl = (import.meta as any).env?.VITE_GEMINI_API_URL;
+      const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+
+      if (apiUrl && apiKey) {
+        try {
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({ prompt }),
+          });
+          if (!res.ok) throw new Error(`API retornou status ${res.status}`);
+          const data = await res.json();
+          // Suporta casos onde o retorno é { summary: '...' } ou { text: '...' }
+          const summary = data.summary || data.text || (typeof data === 'string' ? data : JSON.stringify(data));
+          setSummaryText(summary);
+          setSummaryModalOpen(true);
+        } catch (err: any) {
+          // Se falhar, mostra o prompt para o usuário usar manualmente
+          setSummaryText(`Falha ao chamar a API externa: ${err?.message || err}.\n\nPrompt gerado:\n\n${prompt}`);
+          setSummaryModalOpen(true);
+        }
+      } else {
+        // Sem configuração, apenas mostra o prompt no modal para cópia manual
+        setSummaryText(prompt);
+        setSummaryModalOpen(true);
+      }
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   return (
+    <>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {projects.map((project) => {
         // Filtra as tarefas para este projeto específico a partir da lista geral
@@ -414,36 +606,64 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
         })).filter(item => item.value > 0);
 
         return (
-          <Link key={project.id} to={`/project/${project.id}`} className="block bg-card p-6 rounded-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transition-transform duration-300 relative">
-            {project.imageUrl && (
-              <div className="w-full h-32 flex items-center justify-center bg-secondary rounded-md mb-3 overflow-hidden">
-                <img src={project.imageUrl} alt={project.name} className="max-h-full max-w-full object-contain" />
+          <div key={project.id} className="relative">
+            <Link to={`/project/${project.id}`} className="block bg-card p-6 rounded-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transition-transform duration-300 relative">
+              {project.imageUrl && (
+                <div className="w-full h-32 flex items-center justify-center logo-bg mb-3 overflow-hidden">
+                  <img src={project.imageUrl} alt={project.name} className="max-h-full max-w-full object-contain" />
+                </div>
+              )}
+              <h3 className="text-xl font-bold text-accent">{project.name}</h3>
+              <p className="text-text-secondary mt-2 h-12 overflow-hidden text-ellipsis">{project.description}</p>
+              <div className="flex justify-between items-end mt-4">
+                <div className="text-sm text-gray-400">
+                  <p>Início: {new Date(project.startDate).toLocaleDateString()}</p>
+                  <p>Término: {new Date(project.endDate).toLocaleDateString()}</p>
+                </div>
+                <div style={{ width: 60, height: 60 }} className="flex-shrink-0">
+                  {distribution.length > 0 && (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={distribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%">
+                          {distribution.map((entry, idx) => (
+                            <Cell key={`cell-mini-${idx}`} fill={COLORS[entry.name as TaskStatus]} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
               </div>
-            )}
-            <h3 className="text-xl font-bold text-accent">{project.name}</h3>
-            <p className="text-text-secondary mt-2 h-12 overflow-hidden text-ellipsis">{project.description}</p>
-            <div className="flex justify-between items-end mt-4">
-              <div className="text-sm text-gray-400">
-                <p>Início: {new Date(project.startDate).toLocaleDateString()}</p>
-                <p>Término: {new Date(project.endDate).toLocaleDateString()}</p>
-              </div>
-              <div style={{ width: 60, height: 60 }} className="flex-shrink-0">
-                {distribution.length > 0 && (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={distribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%">
-                        {distribution.map((entry, idx) => (
-                          <Cell key={`cell-mini-${idx}`} fill={COLORS[entry.name as TaskStatus]} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          </Link>
+            </Link>
+
+            {/* Botão de Resumo do Projeto */}
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); generateProjectSummary(project); }}
+              className="absolute top-3 right-3 bg-primary text-white px-3 py-1 rounded-md text-sm hover:opacity-90"
+            >
+              Resumo do Projeto
+            </button>
+          </div>
         );
       })}
-    </div>
+  </div>
+  {/* Modal de Resumo (fallback / resultado) */}
+  {summaryModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="bg-card w-[90%] max-w-3xl p-6 rounded-md">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold">Resumo - {summaryProjectName}</h3>
+            <div className="space-x-2">
+              <button onClick={() => { navigator.clipboard?.writeText(summaryText); }} className="button button-secondary">Copiar</button>
+              <button onClick={() => { setSummaryModalOpen(false); setSummaryText(''); setSummaryProjectName(''); }} className="button button-primary">Fechar</button>
+            </div>
+          </div>
+          <div className="whitespace-pre-wrap text-sm text-text-secondary max-h-[60vh] overflow-auto">
+            {summaryLoading ? <p>Gerando resumo...</p> : <pre className="whitespace-pre-wrap text-sm">{summaryText}</pre>}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

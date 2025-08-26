@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tldraw, TLEditorSnapshot, getSnapshot, loadSnapshot } from '@tldraw/tldraw';
+import '@tldraw/tldraw/tldraw.css';
 import { saveDrawing, updateDrawing, getDrawingsForUser, Drawing, deleteDrawing } from '../services/firebaseDrawings';
 
 interface TldrawWithSaveProps {

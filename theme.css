@@ -1,42 +1,45 @@
+/* Cleaned and consistent theme with CSS variables */
+
 :root {
   --color-primary: #2563eb;
   --color-primary-hover: #1d4ed8;
-  --color-accent: #f59e42;
-  --color-card: #fff;
-  --color-secondary: #f3f4f6;
-  --color-background: #f9fafb;
+  --color-accent: #3b82f6;
+  --color-card: #ffffff;
+  --color-secondary: #f1f5f9;
+  --color-background: #f5f7fa;
   --color-text-primary: #18181b;
-  --color-text-secondary: #52525b;
+  --color-text-secondary: #444857;
   --color-danger: #dc2626;
 }
 
 [data-theme="dark"] {
   --color-primary: #2563eb;
   --color-primary-hover: #1d4ed8;
-  --color-accent: #f59e42;
-  --color-card: #23272f;
-  --color-secondary: #18181b;
+  --color-accent: #3b82f6;
+  --color-card: #1f2937;
+  --color-secondary: #23272f;
   --color-background: #111827;
-  --color-text-primary: #f3f4f6;
-  --color-text-secondary: #a1a1aa;
+  --color-text-primary: #f9fafb;
+  --color-text-secondary: #d1d5db;
   --color-danger: #dc2626;
 }
 
-body, html {
+html, body {
   background: var(--color-background);
   color: var(--color-text-primary);
   transition: background 0.3s, color 0.3s;
 }
 
+.bg-background { background: var(--color-background) !important; transition: background 0.3s; }
+.bg-card { background: var(--color-card) !important; }
+.bg-secondary { background: var(--color-secondary) !important; }
 .bg-primary { background: var(--color-primary) !important; }
 .bg-primary-hover:hover { background: var(--color-primary-hover) !important; }
 .bg-accent { background: var(--color-accent) !important; }
-.bg-card { background: var(--color-card) !important; }
-.bg-secondary { background: var(--color-secondary) !important; }
 .bg-danger { background: var(--color-danger) !important; }
 
-.text-primary { color: var(--color-text-primary) !important; }
-.text-secondary { color: var(--color-text-secondary) !important; }
+.text-text-primary { color: var(--color-text-primary) !important; }
+.text-text-secondary { color: var(--color-text-secondary) !important; }
 .text-accent { color: var(--color-accent) !important; }
 
 .button {
@@ -50,24 +53,9 @@ body, html {
   outline: none;
   font-size: 1rem;
 }
-.button-primary {
-  background: var(--color-primary);
-  color: #fff;
-}
-.button-primary:hover {
-  background: var(--color-primary-hover);
-}
-.button-secondary {
-  background: var(--color-secondary);
-  color: var(--color-text-primary);
-}
-.button-secondary:hover {
-  background: var(--color-card);
-}
-.button-danger {
-  background: var(--color-danger);
-  color: #fff;
-}
-.button-danger:hover {
-  filter: brightness(0.9);
-}
+.button-primary { background: var(--color-primary); color: #fff; }
+.button-primary:hover { background: var(--color-primary-hover); }
+.button-secondary { background: var(--color-secondary); color: var(--color-text-primary); }
+.button-secondary:hover { filter: brightness(0.95); }
+.button-danger { background: var(--color-danger); color: #fff; }
+.button-danger:hover { filter: brightness(0.9); }

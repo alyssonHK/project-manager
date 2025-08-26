@@ -8,7 +8,7 @@ interface ThemeContextType {
   toggleTheme: () => void;
 }
 export const ThemeContext = createContext<ThemeContextType>({ theme: 'light', toggleTheme: () => {} });
-import './theme.css';
+// removed duplicate theme.css import
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChangedListener } from './services/firebaseAuth';
 import type { User } from './types';
