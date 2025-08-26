@@ -144,6 +144,17 @@ const DashboardPage: React.FC = () => {
     [TaskStatus.Done]: '#22c55e',
   };
 
+  // Segurança: evita passar objetos diretamente para JSX (causa React error #31).
+  const renderSafe = (v: any) => {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v;
+    try {
+      return JSON.stringify(v);
+    } catch (e) {
+      return String(v);
+    }
+  };
+
   // << 2. PERFORMANCE: Centralizando o carregamento de dados
   useEffect(() => {
     if (!user) {
@@ -439,10 +450,10 @@ const DashboardPage: React.FC = () => {
                 className="button button-primary"
               >Gerar Resumo (Gemini)</button>
             </div>
-            {savedSummary && (
+        {savedSummary && (
               <div className="bg-secondary p-4 rounded-md mt-4">
                 <h4 className="font-semibold">Resumo salvo</h4>
-                <div className="text-sm text-text-secondary whitespace-pre-wrap mt-2">{savedSummary}</div>
+          <div className="text-sm text-text-secondary whitespace-pre-wrap mt-2">{renderSafe(savedSummary)}</div>
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -483,8 +494,8 @@ const DashboardPage: React.FC = () => {
                               {(provided) => (
                                 <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className="mb-4 bg-secondary p-3 rounded-md shadow">
                                   <div className="font-semibold text-text-primary">{task.title}</div>
-                                  <div className="text-sm text-text-secondary">{task.description}</div>
-                                  <div className="text-xs text-gray-400 mt-1">Projeto: {projects.find(p => p.id === task.projectId)?.name || 'Desconhecido'}</div>
+                                  <div className="text-sm text-text-secondary">{renderSafe(task.description)}</div>
+                                  <div className="text-xs text-gray-400 mt-1">Projeto: {renderSafe(projects.find(p => p.id === task.projectId)?.name) || 'Desconhecido'}</div>
                                 </div>
                               )}
                             </Draggable>
