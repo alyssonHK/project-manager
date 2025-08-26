@@ -210,6 +210,8 @@ const DashboardPage: React.FC = () => {
   const [savedSummaryCollapsed, setSavedSummaryCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem('savedSummaryCollapsed') === 'true'; } catch { return true; }
   });
+  // Estado local para indicar que estamos gerando o resumo via IA (não deve bloquear a UI inteira)
+  const [summaryLoadingGlobal, setSummaryLoadingGlobal] = useState(false);
 
   console.log('DashboardPage renderizado, usuário:', user ? `Logado: ${user.name}` : 'Não logado');
 
@@ -486,7 +488,20 @@ const DashboardPage: React.FC = () => {
       {/* Conteúdo principal */}
       <div className="p-8" style={{ marginTop: '-15px' }}>
         {showProjectForm && <ProjectForm onSave={handleCreateProject} onCancel={() => setShowProjectForm(false)} />}
-        {loading && <p>Carregando dados...</p>}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="bg-secondary p-4 rounded-md shadow inline-flex items-center space-x-3">
+              <svg className="animate-spin h-5 w-5 text-accent" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+              </svg>
+              <div>
+                <div className="font-semibold text-text-primary">Carregando dados...</div>
+                <div className="text-xs text-text-secondary">Aguarde enquanto carregamos seus projetos e tarefas.</div>
+              </div>
+            </div>
+          </div>
+        )}
         {error && <p className="text-red-400">{error}</p>}
         {!loading && projects.length === 0 && (
           <div className="text-center py-16 bg-card rounded-lg"><h3 className="text-xl font-medium text-text-primary">Nenhum projeto encontrado.</h3><p className="text-text-secondary mt-2">Comece criando seu primeiro projeto!</p></div>
@@ -519,14 +534,15 @@ const DashboardPage: React.FC = () => {
             <h2 className="text-2xl font-bold mb-6">Panorama Geral das Tarefas</h2>
             <div className="flex items-center justify-end mb-4 space-x-3">
               <div className="text-sm text-text-secondary">Último resumo: {savedSummaryUpdatedAt ? new Date(savedSummaryUpdatedAt).toLocaleString() : 'Nenhum'}</div>
-              <button
-                onClick={async () => {
-                  if (!user) { setError('Usuário não autenticado'); return; }
-                  // Gera prompt com todas as tarefas e status
-                  try {
-                    setLoading(true);
-                    const allTasks = tasks; // já carregadas no estado
-                    const lines: string[] = [];
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={async () => {
+                    if (!user) { setError('Usuário não autenticado'); return; }
+                    // Gera prompt com todas as tarefas e status
+                    try {
+                      setSummaryLoadingGlobal(true);
+                      const allTasks = tasks; // já carregadas no estado
+                      const lines: string[] = [];
                     lines.push('Contexto: Você é um assistente executivo que recebe o panorama completo de tarefas do usuário. Gere um briefing de alto nível, principais achados, riscos, e 5 ideias acionáveis para avançar os projetos. Priorize recomendações práticas e rápidas.');
                     lines.push('\nResumo geral de tarefas do usuário:');
                     lines.push(`Total de tarefas: ${allTasks.length}`);
@@ -593,15 +609,29 @@ const DashboardPage: React.FC = () => {
                     await saveTasksSummary(user.uid, finalSummary);
                     setSavedSummary(finalSummary);
                     setSavedSummaryUpdatedAt(new Date().toISOString());
-                  } catch (e: any) {
-                    console.error(e);
-                    setError(e?.message || 'Falha ao gerar resumo');
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-                className="button button-primary"
-              >Gerar Resumo (Gemini)</button>
+                    } catch (e: any) {
+                      console.error(e);
+                      setError(e?.message || 'Falha ao gerar resumo');
+                    } finally {
+                      setSummaryLoadingGlobal(false);
+                    }
+                  }}
+                  className={`button button-primary ${summaryLoadingGlobal ? 'opacity-60 pointer-events-none' : ''}`}
+                  disabled={summaryLoadingGlobal}
+                >Gerar Resumo (Gemini)</button>
+                {summaryLoadingGlobal && (
+                  <div className="inline-flex items-center space-x-2 bg-secondary p-2 rounded-md">
+                    <svg className="animate-spin h-4 w-4 text-accent" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                    <div className="text-sm">
+                      <div className="font-semibold text-text-primary">Enviando para a IA...</div>
+                      <div className="text-xs text-text-secondary">Você pode continuar usando a dashboard normalmente.</div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             {savedSummary && (
               <div className="mt-4">
@@ -710,11 +740,15 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [summaryProjectName, setSummaryProjectName] = useState('');
+  // Loading por projeto individual (mapa projectId -> boolean)
+  const [projectLoadingMap, setProjectLoadingMap] = useState<Record<string, boolean>>({});
 
   // Gera o prompt e tenta chamar a API externa (quando configurada). Caso contrário, abre modal com o prompt para cópia/manual.
   const generateProjectSummary = async (project: Project) => {
-    setSummaryProjectName(project.name);
-    setSummaryLoading(true);
+  setSummaryProjectName(project.name);
+  setSummaryLoading(true);
+  // marca este projeto como loading
+  setProjectLoadingMap(prev => ({ ...prev, [project.id]: true }));
     try {
       // Inclui tarefas Concluídas, Em Andamento e Pendentes para contexto completo
       const projectTasks = tasks.filter(t => t.projectId === project.id && [TASK_STATUS.Done, TASK_STATUS.InProgress, TASK_STATUS.ToDo].includes(t.status));
@@ -805,6 +839,12 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
       }
     } finally {
       setSummaryLoading(false);
+      // limpa loading deste projeto
+      setProjectLoadingMap(prev => {
+        const copy = { ...prev };
+        delete copy[project.id];
+        return copy;
+      });
     }
   };
 
@@ -853,9 +893,15 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
             {/* Botão de Resumo do Projeto */}
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); generateProjectSummary(project); }}
-              className="absolute top-3 right-3 bg-primary text-white px-3 py-1 rounded-md text-sm hover:opacity-90"
+              className={`absolute top-3 right-3 px-3 py-1 rounded-md text-sm ${projectLoadingMap[project.id] ? 'bg-secondary text-text-secondary' : 'bg-primary text-white hover:opacity-90'}`}
+              disabled={!!projectLoadingMap[project.id]}
             >
-              Resumo do Projeto
+              {projectLoadingMap[project.id] ? (
+                <span className="inline-flex items-center space-x-2">
+                  <svg className="animate-spin h-4 w-4 text-accent" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+                  <span>Gerando...</span>
+                </span>
+              ) : 'Resumo do Projeto'}
             </button>
           </div>
         );
