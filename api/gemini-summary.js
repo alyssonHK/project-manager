@@ -14,6 +14,7 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
   const serviceAccountJson = process.env.GEMINI_SERVICE_ACCOUNT_KEY || process.env.VITE_GEMINI_SERVICE_ACCOUNT_KEY;
   const projectId = process.env.GEMINI_PROJECT_ID || process.env.VITE_GEMINI_PROJECT_ID || process.env.GEMINI_PROJECT_ID;
+  const openaiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY || null;
 
   if (!apiUrl || (!apiKey && !serviceAccountJson)) {
     console.error('gemini proxy misconfigured:', {
@@ -30,7 +31,32 @@ export default async function handler(req, res) {
     const payload = { model, prompt };
 
     let fetchUrl = apiUrl;
-    const headers = { 'Content-Type': 'application/json' };
+    let headers = { 'Content-Type': 'application/json' };
+
+    // If OpenAI key is available (env or passed in body/openai flag), call OpenAI Responses API (gpt-5-mini)
+    const useOpenAI = Boolean(openaiKey || (req.body && req.body.openai) || (req.body && req.body.provider === 'openai') || (req.body && req.body.openaiApiKey));
+    if (useOpenAI) {
+      const key = (req.body && req.body.openaiApiKey) || openaiKey;
+      if (!key) {
+        return res.status(500).json({ error: 'OpenAI API key not configured on server' });
+      }
+      fetchUrl = 'https://api.openai.com/v1/responses';
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`,
+      };
+      const openaiModel = (req.body && req.body.model) || process.env.OPENAI_MODEL || 'gpt-5-mini';
+      const openaiPayload = { model: openaiModel, input: prompt };
+      const rOpen = await fetch(fetchUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(openaiPayload),
+      });
+      const openCt = rOpen.headers.get('content-type') || '';
+      let openData;
+      if (openCt.includes('application/json')) openData = await rOpen.json(); else openData = await rOpen.text();
+      return res.status(rOpen.status).json({ ok: rOpen.ok, result: openData });
+    }
 
     // Se houver service account JSON, gere um access token e use Bearer
   if (serviceAccountJson) {
@@ -68,7 +94,7 @@ export default async function handler(req, res) {
       body: JSON.stringify(payload),
     });
 
-    const contentType = r.headers.get('content-type') || '';
+  const contentType = r.headers.get('content-type') || '';
     let data;
     if (contentType.includes('application/json')) {
       data = await r.json();
