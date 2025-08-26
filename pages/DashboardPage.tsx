@@ -30,6 +30,78 @@ const TASK_STATUS: Record<string, TaskStatus> = {
   DONE: TaskStatus.Done,
 };
 
+// Normaliza formatos diferentes de resposta de LLM para texto legível.
+function extractModelText(payload: any): string {
+  if (!payload && payload !== 0) return '';
+  if (typeof payload === 'string') return payload;
+  if (typeof payload.summary === 'string') return payload.summary;
+  if (typeof payload.text === 'string') return payload.text;
+  if (typeof payload.output_text === 'string') return payload.output_text;
+
+  if (Array.isArray(payload.output)) {
+    const parts: string[] = [];
+    for (const o of payload.output) {
+      if (typeof o === 'string') parts.push(o);
+      else if (o.content && Array.isArray(o.content)) {
+        for (const c of o.content) {
+          if (typeof c === 'string') parts.push(c);
+          else if (typeof c.text === 'string') parts.push(c.text);
+          else if (typeof c.content === 'string') parts.push(c.content);
+        }
+      } else if (typeof o.text === 'string') parts.push(o.text);
+    }
+    if (parts.length) return parts.join('\n\n');
+  }
+
+  if (Array.isArray(payload.candidates) && payload.candidates.length > 0) {
+    const cand = payload.candidates[0];
+    if (cand.output && Array.isArray(cand.output)) {
+      const parts: string[] = [];
+      for (const seg of cand.output) {
+        if (typeof seg === 'string') parts.push(seg);
+        else if (seg.content && Array.isArray(seg.content)) {
+          for (const c of seg.content) {
+            if (typeof c === 'string') parts.push(c);
+            else if (typeof c.text === 'string') parts.push(c.text);
+            else if (c.content && typeof c.content === 'string') parts.push(c.content);
+          }
+        }
+      }
+      if (parts.length) return parts.join('\n\n');
+    }
+    if (typeof cand.outputText === 'string') return cand.outputText;
+    if (typeof cand.content === 'string') return cand.content;
+    if (cand.message && typeof cand.message === 'string') return cand.message;
+  }
+
+  if (Array.isArray(payload.choices) && payload.choices.length > 0) {
+    const ch = payload.choices[0];
+    if (typeof ch.text === 'string') return ch.text;
+    if (ch.message) {
+      if (typeof ch.message === 'string') return ch.message;
+      if (typeof ch.message.content === 'string') return ch.message.content;
+      if (Array.isArray(ch.message.content)) return ch.message.content.map((c: any) => (typeof c === 'string' ? c : c?.text || '')).join('\n');
+    }
+  }
+
+  try {
+    const collector: string[] = [];
+    const visit = (v: any, depth = 0) => {
+      if (depth > 3 || v == null) return;
+      if (typeof v === 'string') { collector.push(v); return; }
+      if (typeof v === 'number' || typeof v === 'boolean') { collector.push(String(v)); return; }
+      if (Array.isArray(v)) { for (const e of v) visit(e, depth + 1); return; }
+      if (typeof v === 'object') { for (const k of Object.keys(v)) visit(v[k], depth + 1); }
+    };
+    visit(payload, 0);
+    if (collector.length) return collector.join('\n\n');
+  } catch (e) {
+    // ignore
+  }
+
+  try { return JSON.stringify(payload); } catch (e) { return String(payload); }
+}
+
 // Hook de Tema (sem alterações, já estava bom)
 function useThemeToggle() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -153,6 +225,84 @@ const DashboardPage: React.FC = () => {
     } catch (e) {
       return String(v);
     }
+  };
+
+  // Normaliza formatos diferentes de resposta de LLM para texto legível.
+  const extractModelText = (payload: any): string => {
+    if (!payload && payload !== 0) return '';
+    if (typeof payload === 'string') return payload;
+    // Common quick wins
+    if (typeof payload.summary === 'string') return payload.summary;
+    if (typeof payload.text === 'string') return payload.text;
+    if (typeof payload.output_text === 'string') return payload.output_text;
+
+    // OpenAI Responses: payload.output -> array
+    if (Array.isArray(payload.output)) {
+      const parts: string[] = [];
+      for (const o of payload.output) {
+        if (typeof o === 'string') parts.push(o);
+        else if (o.content && Array.isArray(o.content)) {
+          for (const c of o.content) {
+            if (typeof c === 'string') parts.push(c);
+            else if (typeof c.text === 'string') parts.push(c.text);
+            else if (typeof c.content === 'string') parts.push(c.content);
+          }
+        } else if (typeof o.text === 'string') parts.push(o.text);
+      }
+      if (parts.length) return parts.join('\n\n');
+    }
+
+    // Google Generative responses: candidates / candidates[0].output
+    if (Array.isArray(payload.candidates) && payload.candidates.length > 0) {
+      const cand = payload.candidates[0];
+      if (cand.output && Array.isArray(cand.output)) {
+        const parts: string[] = [];
+        for (const seg of cand.output) {
+          if (typeof seg === 'string') parts.push(seg);
+          else if (seg.content && Array.isArray(seg.content)) {
+            for (const c of seg.content) {
+              if (typeof c === 'string') parts.push(c);
+              else if (typeof c.text === 'string') parts.push(c.text);
+              else if (c.content && typeof c.content === 'string') parts.push(c.content);
+            }
+          }
+        }
+        if (parts.length) return parts.join('\n\n');
+      }
+      if (typeof cand.outputText === 'string') return cand.outputText;
+      if (typeof cand.content === 'string') return cand.content;
+      if (cand.message && typeof cand.message === 'string') return cand.message;
+    }
+
+    // OpenAI old-style choices
+    if (Array.isArray(payload.choices) && payload.choices.length > 0) {
+      const ch = payload.choices[0];
+      if (typeof ch.text === 'string') return ch.text;
+      if (ch.message) {
+        if (typeof ch.message === 'string') return ch.message;
+        if (typeof ch.message.content === 'string') return ch.message.content;
+        if (Array.isArray(ch.message.content)) return ch.message.content.map((c: any) => (typeof c === 'string' ? c : c?.text || '')).join('\n');
+      }
+    }
+
+    // Fallback: procurar recursivamente por strings dentro do objeto (até profundidade baixa)
+    try {
+      const collector: string[] = [];
+      const visit = (v: any, depth = 0) => {
+        if (depth > 3 || v == null) return;
+        if (typeof v === 'string') { collector.push(v); return; }
+        if (typeof v === 'number' || typeof v === 'boolean') { collector.push(String(v)); return; }
+        if (Array.isArray(v)) { for (const e of v) visit(e, depth + 1); return; }
+        if (typeof v === 'object') { for (const k of Object.keys(v)) visit(v[k], depth + 1); }
+      };
+      visit(payload, 0);
+      if (collector.length) return collector.join('\n\n');
+    } catch (e) {
+      // ignore
+    }
+
+    // Último recurso: JSON
+    try { return JSON.stringify(payload); } catch (e) { return String(payload); }
   };
 
   // << 2. PERFORMANCE: Centralizando o carregamento de dados
@@ -410,23 +560,23 @@ const DashboardPage: React.FC = () => {
                     let finalSummary = '';
 
                     // Tenta usar o proxy (recomendado). Caso o proxy não esteja acessível, tenta chamar direto (menos seguro).
-                    if (proxyUrl) {
+          if (proxyUrl) {
                       try {
                         const res = await fetch(proxyUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
                         if (!res.ok) throw new Error(`Proxy retornou ${res.status}`);
                         const data = await res.json();
                         // data.result contém o retorno da Gemini via proxy
-                        const payload = data.result || data;
-                        finalSummary = payload.summary || payload.text || (typeof payload === 'string' ? payload : JSON.stringify(payload));
+            const payload = data.result || data;
+            finalSummary = extractModelText(payload);
                       } catch (errProxy) {
                         console.warn('Falha no proxy, tentando chamada direta...', errProxy);
                         // fallback para chamada direta se chave e endpoint estiverem configurados
-                        if (apiUrl && apiKey) {
+                          if (apiUrl && apiKey) {
                           try {
                             const res2 = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ prompt }) });
                             if (!res2.ok) throw new Error(`API retornou ${res2.status}`);
                             const data2 = await res2.json();
-                            finalSummary = data2.summary || data2.text || (typeof data2 === 'string' ? data2 : JSON.stringify(data2));
+                            finalSummary = extractModelText(data2);
                           } catch (errDirect) {
                             finalSummary = `Falha ao chamar API externa: ${String(errDirect)}.\n\nPrompt:\n${prompt}`;
                           }
@@ -586,7 +736,7 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
       const apiUrl = (import.meta as any).env?.VITE_GEMINI_API_URL;
       const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
 
-      if (apiUrl && apiKey) {
+    if (apiUrl && apiKey) {
         try {
           const res = await fetch(apiUrl, {
             method: 'POST',
@@ -597,14 +747,13 @@ function ProjectCardsWithMiniCharts({ projects, tasks }: ProjectCardsProps) {
             body: JSON.stringify({ prompt }),
           });
           if (!res.ok) throw new Error(`API retornou status ${res.status}`);
-          const data = await res.json();
-          // Suporta casos onde o retorno é { summary: '...' } ou { text: '...' }
-          const summary = data.summary || data.text || (typeof data === 'string' ? data : JSON.stringify(data));
-          setSummaryText(summary);
+      const data = await res.json();
+      const summary = extractModelText(data);
+      setSummaryText(summary);
           setSummaryModalOpen(true);
         } catch (err: any) {
           // Se falhar, mostra o prompt para o usuário usar manualmente
-          setSummaryText(`Falha ao chamar a API externa: ${err?.message || err}.\n\nPrompt gerado:\n\n${prompt}`);
+      setSummaryText(`Falha ao chamar a API externa: ${err?.message || err}.\n\nPrompt gerado:\n\n${prompt}`);
           setSummaryModalOpen(true);
         }
       } else {
