@@ -207,6 +207,9 @@ const DashboardPage: React.FC = () => {
   const [error, setError] = useState('');
   const [savedSummary, setSavedSummary] = useState<string | null>(null);
   const [savedSummaryUpdatedAt, setSavedSummaryUpdatedAt] = useState<string | null>(null);
+  const [savedSummaryCollapsed, setSavedSummaryCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('savedSummaryCollapsed') === 'true'; } catch { return true; }
+  });
 
   console.log('DashboardPage renderizado, usuário:', user ? `Logado: ${user.name}` : 'Não logado');
 
@@ -600,10 +603,33 @@ const DashboardPage: React.FC = () => {
                 className="button button-primary"
               >Gerar Resumo (Gemini)</button>
             </div>
-        {savedSummary && (
-              <div className="bg-secondary p-4 rounded-md mt-4">
-                <h4 className="font-semibold">Resumo salvo</h4>
-          <div className="text-sm text-text-secondary whitespace-pre-wrap mt-2">{renderSafe(savedSummary)}</div>
+            {savedSummary && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between bg-secondary p-2 rounded-md">
+                  <div className="flex items-center space-x-3">
+                    <h4 className="font-semibold">Resumo salvo</h4>
+                    <div className="text-xs text-text-secondary">{savedSummaryUpdatedAt ? new Date(savedSummaryUpdatedAt).toLocaleString() : ''}</div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => { const v = !savedSummaryCollapsed; setSavedSummaryCollapsed(v); try { localStorage.setItem('savedSummaryCollapsed', String(v)); } catch {} }}
+                      className="text-sm px-3 py-1 bg-primary text-white rounded-md hover:opacity-90"
+                    >
+                      {savedSummaryCollapsed ? 'Mostrar' : 'Ocultar'}
+                    </button>
+                    <button
+                      onClick={() => { setSavedSummary(null); setSavedSummaryUpdatedAt(null); }}
+                      title="Remover resumo salvo"
+                      className="text-sm px-3 py-1 bg-secondary border border-gray-600 rounded-md hover:opacity-90"
+                    >Remover</button>
+                  </div>
+                </div>
+
+                {!savedSummaryCollapsed && (
+                  <div className="bg-secondary p-4 rounded-md mt-2 text-sm text-text-secondary whitespace-pre-wrap max-h-[40vh] overflow-auto">
+                    {renderSafe(savedSummary)}
+                  </div>
+                )}
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
