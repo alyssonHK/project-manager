@@ -3,6 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(() => {
+  const base = process.env.VITE_BASE || '/project-manager/';
   return {
     plugins: [react()],
     resolve: {
@@ -10,6 +11,7 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
-    base: '/project-manager/',
+    // Base configurável para suportar GitHub Pages (default) e deploys em raiz (Vercel)
+    base,
   };
 });
