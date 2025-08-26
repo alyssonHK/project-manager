@@ -77,6 +77,21 @@ export default async function handler(req, res) {
       data = await r.text();
     }
 
+    // If upstream returned 403 and we used a service account token, fetch tokeninfo and include scopes
+    if (r.status === 403 && headers['Authorization']) {
+      try {
+        const token = headers['Authorization'].replace('Bearer ', '');
+        const infoRes = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(token)}`);
+        const info = await infoRes.json();
+        const scopes = info.scope || info.scopes || null;
+        console.error('gemini proxy: upstream 403, returning token scopes for diagnosis', { scopes });
+        return res.status(403).json({ error: data || { message: 'Upstream 403 from Gemini' }, debug: { token_scopes: scopes } });
+      } catch (e) {
+        console.error('gemini proxy: failed to fetch tokeninfo after 403', e && e.message ? e.message : String(e));
+        // fallthrough to return upstream data below
+      }
+    }
+
     // If debug flag requested, fetch token scopes from tokeninfo and include only scopes in debug
     if (req.body && req.body.debug === true && headers['Authorization']) {
       try {
